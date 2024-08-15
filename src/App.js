@@ -9,52 +9,97 @@ import Books from "./Books";
 export default function App() {
   const [nome, setNome] = useState('')
   const [preco, setPreco] = useState('')
+  const [idEdit, setIdEdit] = useState(null);
   const [books, setBooks] = useState([])
+  const [disabledBtn, setDisabledBtn] = useState(false);
   
-  useEffect(() => {
-    loadBooks = async() =>{
-      const realm = await getRealm()
-      const data = realm.objects('Book');
-      setBooks(data)
+  useEffect(()=>{
+    loadBooks = async () => {
+      const realm = await getRealm();
+      const data = realm.objects('Book').toJSON();
+      setBooks(data);
     }
 
-    loadBooks()
-  }, [])
+    loadBooks();
+  }, []);
 
-  saveBook = async (data) =>{
+  saveBook = async (data) => {
     const realm = await getRealm();
 
     const id = realm.objects('Book').sorted('id', true).length > 0
     ? realm.objects('Book').sorted('id', true)[0].id + 1 : 1;
 
-    const dadosLivro ={
+    const dadosLivro = {
       id: id,
       nome: data.nome,
       preco: data.preco
-    }
+     }
 
-    realm.write( () =>{
-      realm.create('Book', dadosLivro)
-    })
+     realm.write(()=>{
+       realm.create('Book', dadosLivro)
+     });
+
+     const dadosAlterados = await realm.objects('Book').sorted('id', false).toJSON();
+     setBooks(dadosAlterados)
 
   }
   
-   addBook = async () => {
-    if(nome === '' || preco ===''){
-      alert('Preecha todos os campos!')
+  addBook = async () => {
+   if(nome === '' || preco === ''){
+     alert('Preecha todos os campos!');
+     return;
+   }
+
+   try{
+    const data = { nome: nome, preco: preco };
+    await saveBook(data);
+ 
+    setNome('');
+    setPreco('');
+    Keyboard.dismiss();
+
+   }catch(err){
+     alert(err);
+   }
+   
+  }
+
+  function editarBook(data){
+    setNome(data.nome);
+    setPreco(data.preco);
+    setIdEdit(data.id);
+    setDisabledBtn(true);
+  }
+
+  editBook = async () => {
+    if(idEdit === null){
+      alert('Você nao pode editar!');
       return;
     }
-    try{
-      const data = {nome: nome, preco: preco}
-      await saveBook(data)
 
-      setNome('');
-      setPreco('');
-      Keyboard.dismiss()
+    const realm = await getRealm();
 
-    }catch(err){
-      alert(err);
-    }
+    const response = {
+      id: idEdit,
+      nome: nome,
+      preco: preco
+    };
+    await realm.write(()=>{
+      realm.create('Book', response, 'modified')
+    });
+
+
+    const dadosAlterados = await realm.objects('Book').sorted('id', false).toJSON();
+    setBooks(dadosAlterados);
+    setNome('');
+    setPreco('');
+    setIdEdit(null);
+    setDisabledBtn(false);
+    Keyboard.dismiss();
+
+
+
+
   }
 
   return (
@@ -77,11 +122,15 @@ export default function App() {
       />
 
       <CenterView>
-          <Botao onPress={ addBook}>
+          <Botao 
+            onPress={ addBook}
+            disabled={disabledBtn} 
+            style={{opacity: disabledBtn ? 0.1 : 1 }}
+          >
             <BotaoText>Cadastrar</BotaoText>
           </Botao>
 
-          <Botao onPress={ () => {}}>
+          <Botao onPress={ editBook }>
             <BotaoText>Editar</BotaoText>
           </Botao>
       </CenterView>
@@ -91,7 +140,7 @@ export default function App() {
         keyboardShouldPersistTaps="handled"
         data={books}
         keyExtractor={item => String(item.id)}
-        renderItem={ ({item})  => (<Books data={item}/>)}
+        renderItem={ ({item})  => (<Books data={item} editar={editarBook}/>)}
       />
     </Container>
   );
